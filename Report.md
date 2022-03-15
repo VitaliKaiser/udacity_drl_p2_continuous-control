@@ -75,6 +75,22 @@ dx = self.theta * (self.mu - x) + self.sigma * np.array(
 ```
 Basically I replaced `random.random()` by `random.uniform(-1, 1)`. The first one is only between 0 and 1, and the later between -1 and 1 which leads to the behavior I would expect.
 
+# Hyperparameter
+After playing around I ended up with following hyperparamter:
+
+```python
+"tau": 1e-3,
+"gamma": 0.99,
+"lr_actor": 1e-3,
+"lr_critic": 1e-3,
+"weight_decay_critic": 0.0,
+"noise_sigma": 0.4,
+"noise_theta": 0.15,
+"learn_every_step": 20,
+"learn_steps": 10,
+```
+
+Both actor and critic consist of 3 layers with 200 units in the first hidden layer and and 100 and second one, both activated by a RELU.
 
 # Changing back from 1 to 20
 Since I had problems with stable training of a single agent, I did expect that changing to 20 agents may add more stability (because of smoothed gradients).
