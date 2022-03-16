@@ -85,6 +85,7 @@ class LaBER(Memory):
         sampling_weights = q_values - torch.min(q_values)
         sampling_weights = sampling_weights / torch.sum(sampling_weights)
 
+        # Sample indices of the small batch
         idx = sampling_weights.multinomial(num_samples=self.batch_size)
 
         return (

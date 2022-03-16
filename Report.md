@@ -98,9 +98,75 @@ The result was even higher then my hopes: The agents had a stable training and I
 
 # Memory
 
-For the [3rd Udacity](https://github.com/VitaliKaiser/udacity_drl_p3_collab-compet/blob/main/Report.md) project I implemented the paper ["Large Batch Experience Replay"](https://arxiv.org/abs/2110.01528) and tried it out also here. With the hyperparameter choice here it did need a bit longer to converge (160 episodes). But this could be due to the not suited hyperparameter.
+For the [3rd Udacity](https://github.com/VitaliKaiser/udacity_drl_p3_collab-compet/blob/main/Report.md) project I implemented the paper ["Large Batch Experience Replay"](https://arxiv.org/abs/2110.01528) and tried it out also here.
 
-Here is on tensorboard screenshot of the learning curves:
+The basic idea of the paper is that you first sample from a big batch, evaluate this one with the critic, and sample again a smaller batch but with a prioritization based on the critic evaluation in the first step. The authors claim that this avoids the problem of outdated information which could happen in vanilla "Prioritized Experience Replay".
+
+My implementation looks like this:
+
+```python
+class LaBER(Memory):
+    """Memory with prioritization.
+
+    Based on:
+    Lahire, Thibault, Matthieu Geist, and Emmanuel Rachelson. "Large Batch Experience Replay." arXiv preprint arXiv:2110.01528 (2021).
+    https://arxiv.org/abs/2110.01528
+
+    Args:
+        buffer_size: Maximum size of buffer.
+        batch_size: Size of each training batch.
+        seed: Random seed.
+        batch_size_multiplicator: Multiple of batch_size used to define the size if the "large batch" which is used for rating.
+        critic: Critic used for rating experiences in the large batch.
+        cast_action_to_long: If true, the returned action tensor is casted to long (for discrete problems).
+    """
+
+    def __init__(
+        self,
+        buffer_size: int,
+        batch_size: int,
+        seed: int,
+        batch_size_multiplicator: int,
+        critic,
+        cast_action_to_long: bool = False,
+    ) -> None:
+
+        self.batch_size = batch_size
+        large_batchsize = batch_size * batch_size_multiplicator
+        self.memory = ReplayBuffer(
+            buffer_size, large_batchsize, seed, cast_action_to_long
+        )
+        self.critic = critic
+
+    def sample(self) -> Tuple:
+        states, actions, rewards, next_states, dones = self.memory.sample()
+
+        self.critic.eval()
+        with torch.no_grad():
+            q_values = torch.squeeze(self.critic(states, actions))
+        self.critic.train()
+
+        # Normalize so we can use q values for sampling
+        sampling_weights = q_values - torch.min(q_values)
+        sampling_weights = sampling_weights / torch.sum(sampling_weights)
+
+        # Sample indices of the small batch
+        idx = sampling_weights.multinomial(num_samples=self.batch_size)
+
+        return (
+            states[idx],
+            actions[idx],
+            rewards[idx],
+            next_states[idx],
+            dones[idx],
+        )
+```
+
+With the hyperparameter choice here it did need a bit longer to converge (160 episodes). But this could be due to the not suited hyperparameter.
+
+Note: For the final solution I sticked with the the vanilla ReplayBuffer, I added this to the report because it was an outcome that I did not expect: The same code did improve my results in project 3 a lot, but here at least with the current hyperparameter it seems to perform worse.
+
+Here is a tensorboard screenshot of the learning curves:
 
 ![Tensorboard results](img/tb_p2.PNG)
 
@@ -113,8 +179,11 @@ Please note that the sliding mean is in tensorboard log scale!
 
 ## Ideas for Future Work
 
+### Memory
+As mentioned before, LaBER memory seemed not to work out in this task. One could investigate for the reason and compare it e.g. with "Prioritized Experience Replay". Maybe it is also just sensitive to hyperparameter.
+
 ### Benchmarking Deep Reinforcement Learning for Continuous Control
-As stated in [Benchmarking Deep Reinforcement Learning for Continuous Control]() Trust Region Policy Optimization (TRPO) and Truncated Natural Policy Gradient (TNPG) seem to stabilize training. It would be interesting to see how much faster the agent could converge with those approaches.
+As stated in [Benchmarking Deep Reinforcement Learning for Continuous Control](https://arxiv.org/abs/1604.06778) Trust Region Policy Optimization (TRPO) and Truncated Natural Policy Gradient (TNPG) seem to stabilize training. It would be interesting to see how much faster the agent could converge with those approaches.
 
 ### NoisyNetwork
 In my current DDPG approach I am using noise from the Ornstein-Uhlenbeck process in order to control the exploration. ["Noisy Networks for Exploration"](https://arxiv.org/abs/1706.10295) in contrast seemed to be very practical since the adapt the noise during training and claim to get give better training signal.
